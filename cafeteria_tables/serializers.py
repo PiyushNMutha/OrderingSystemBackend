@@ -5,3 +5,19 @@ class CafeteriaTableSerializer(serializers.ModelSerializer):
     class Meta:
         model = CafeteriaTable
         fields = '__all__'
+
+    def get_qr_code(self, obj):
+        # Base URL (change this)
+        base_url = "https://coffee-ordering-systemqr.vercel.app/"
+
+        url = f"{base_url}{obj.table_number}"
+
+        # Generate QR
+        qr = qrcode.make(url)
+
+        # Convert to base64
+        buffer = BytesIO()
+        qr.save(buffer, format="PNG")
+        qr_str = base64.b64encode(buffer.getvalue()).decode()
+
+        return f"data:image/png;base64,{qr_str}"
