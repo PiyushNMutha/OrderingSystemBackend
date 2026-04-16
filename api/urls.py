@@ -9,5 +9,5 @@ urlpatterns = [
     path('profile/', profile),
     path('api/', include('cafeteria_tables.urls')),
     path('api/', include('menu.urls')),
-
+    path('api/', include('orders.urls')),
 ]
