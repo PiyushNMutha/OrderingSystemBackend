@@ -30,4 +30,6 @@ urlpatterns = [
 
     path('api/', include('api.urls')),      # auth app
     path('api/', include('menu.urls')),     # menu app
+    path('api/', include('orders.urls')),
+    path('api/', include('cafeteria_tables.urls')),
 ]
