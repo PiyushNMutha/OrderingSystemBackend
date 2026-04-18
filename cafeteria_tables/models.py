@@ -1,4 +1,5 @@
 from django.db import models
+from django.db import models
 
 class CafeteriaTable(models.Model):
     table_id = models.AutoField(primary_key=True)

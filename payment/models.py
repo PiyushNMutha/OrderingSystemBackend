@@ -1,3 +1,5 @@
+from django.db import models
+
 class Payment(models.Model):
     payment_id = models.AutoField(primary_key=True)
     order_id = models.IntegerField()

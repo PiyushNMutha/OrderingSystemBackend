@@ -1,13 +1,7 @@
-from django.contrib import admin
-from django.http import HttpResponse
-from django.urls import path, include
+from django.urls import path
 from .views import register, profile 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('register/', register),
-    path('profile/', profile),
-    # path('api/', include('cafeteria_tables.urls')),
-    path('api/', include('menu.urls')),
-    # path('api/', include('orders.urls')),
+    path('register/', register, name='register'),
+    path('profile/', profile, name='profile'),
 ]
