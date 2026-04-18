@@ -1,7 +1,12 @@
+import qrcode
+import base64
+from io import BytesIO
 from rest_framework import serializers
 from .models import CafeteriaTable
 
 class CafeteriaTableSerializer(serializers.ModelSerializer):
+    qr_code = serializers.SerializerMethodField()
+
     class Meta:
         model = CafeteriaTable
         fields = '__all__'
