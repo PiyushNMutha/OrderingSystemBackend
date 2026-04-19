@@ -5,6 +5,7 @@ from rest_framework import status
 from cafeteria_tables.models import CafeteriaTable
 from menu.models import MenuItem
 from .models import Order
+from .serializers import OrderListSerializer, UpdateOrderStatusSerializer
 from order_item.models import OrderItem
 from customer.models import Customer
 from payment.models import Payment
@@ -80,3 +81,22 @@ class CreateOrderAPI(APIView):
             "order_id": order.order_id,
             "total_amount": total_amount
         }, status=status.HTTP_201_CREATED)
+
+class OrderListAPI(APIView):
+    def get(self, request):
+        orders = Order.objects.all().order_by('-created_at')
+        serializer = OrderListSerializer(orders, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+class UpdateOrderStatusAPI(APIView):
+    def patch(self, request, order_id):
+        try:
+            order = Order.objects.get(order_id=order_id)
+        except Order.DoesNotExist:
+            return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UpdateOrderStatusSerializer(order, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Order status updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -18,10 +18,14 @@ class UpdateTableStatusAPI(APIView):
         try:
             table = CafeteriaTable.objects.get(table_id=table_id)
         except CafeteriaTable.DoesNotExist:
-            return Response({"error": "Table not found"}, status=404)
+            return Response({"error": "Table not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        table.status = request.data.get('status', table.status)
+        new_status = request.data.get('status')
+        if new_status:
+            if new_status not in ['Free', 'Occupied']:
+                return Response({"error": "Invalid status. Must be 'Free' or 'Occupied'"}, status=status.HTTP_400_BAD_REQUEST)
+            table.status = new_status
         table.save()
 
         serializer = CafeteriaTableSerializer(table)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
