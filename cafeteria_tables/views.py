@@ -29,3 +29,34 @@ class UpdateTableStatusAPI(APIView):
 
         serializer = CafeteriaTableSerializer(table)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+class CreateTableAPI(APIView):
+    def post(self, request):
+        table_number = request.data.get('table_number')
+        if not table_number:
+            return Response({"error": "table_number is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if table already exists
+        if CafeteriaTable.objects.filter(table_number=table_number).exists():
+            return Response({"error": "Table with this number already exists"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        capacity = request.data.get('capacity', 4)
+        
+        table = CafeteriaTable(
+            table_number=table_number,
+            capacity=capacity,
+            status='Free'
+        )
+        table.save()
+        
+        serializer = CafeteriaTableSerializer(table)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+class DeleteTableAPI(APIView):
+    def delete(self, request, table_id):
+        try:
+            table = CafeteriaTable.objects.get(table_id=table_id)
+            table.delete()
+            return Response({"message": "Table deleted successfully"}, status=status.HTTP_200_OK)
+        except CafeteriaTable.DoesNotExist:
+            return Response({"error": "Table not found"}, status=status.HTTP_404_NOT_FOUND)
