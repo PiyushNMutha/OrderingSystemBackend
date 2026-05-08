@@ -1,6 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.utils import timezone
+from django.db.models import Sum, Count, Avg
+from django.db.models.functions import ExtractHour
 
 from cafeteria_tables.models import CafeteriaTable
 from menu.models import MenuItem
@@ -100,3 +103,97 @@ class UpdateOrderStatusAPI(APIView):
             serializer.save()
             return Response({"message": "Order status updated successfully", "data": serializer.data}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class TrackOrderAPI(APIView):
+    def get(self, request, order_id):
+        try:
+            order = Order.objects.get(order_id=order_id)
+            return Response({
+                "order_id": order.order_id,
+                "status": order.order_status,
+                "created_at": order.created_at,
+                "total_amount": order.total_amount
+            }, status=status.HTTP_200_OK)
+        except Order.DoesNotExist:
+            return Response({"error": "Order not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class AdminDashboardAPI(APIView):
+    def get(self, request):
+        today = timezone.now().date()
+        current_month = today.month
+        current_year = today.year
+
+        # Basic Metrics
+        daily_revenue = Order.objects.filter(created_at__date=today).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        monthly_revenue = Order.objects.filter(created_at__month=current_month, created_at__year=current_year).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        average_order_value = Order.objects.aggregate(Avg('total_amount'))['total_amount__avg'] or 0
+        total_orders_today = Order.objects.filter(created_at__date=today).count()
+
+        # Order Status Breakdown
+        status_breakdown_qs = Order.objects.values('order_status').annotate(count=Count('order_id'))
+        status_breakdown = {item['order_status']: item['count'] for item in status_breakdown_qs}
+
+        # Predictive & Item Analytics
+        order_items_qs = OrderItem.objects.values('item_id').annotate(total_quantity=Sum('quantity')).order_by('-total_quantity')
+        item_ids = [item['item_id'] for item in order_items_qs]
+        items = MenuItem.objects.filter(item_id__in=item_ids)
+        item_map = {item.item_id: item.item_name for item in items}
+
+        items_sales = []
+        for item in order_items_qs:
+            items_sales.append({
+                "item_name": item_map.get(item['item_id'], f"Unknown Item {item['item_id']}"),
+                "total_quantity": item['total_quantity']
+            })
+
+        top_selling_items = items_sales[:5]
+        low_performing_items = items_sales[-5:] if len(items_sales) >= 5 else list(reversed(items_sales))
+
+        # Peak ordering time
+        peak_hours_qs = Order.objects.annotate(hour=ExtractHour('created_at')).values('hour').annotate(order_count=Count('order_id')).order_by('-order_count')[:5]
+        peak_ordering_time = [{"hour": f"{item['hour']:02d}:00" if item['hour'] is not None else "Unknown", "order_count": item['order_count']} for item in peak_hours_qs]
+
+        # Table Analytics
+        table_sales_qs = Order.objects.values('table_id').annotate(total_sales=Sum('total_amount')).order_by('-total_sales')
+        table_ids = [item['table_id'] for item in table_sales_qs]
+        tables = CafeteriaTable.objects.filter(table_id__in=table_ids)
+        table_map = {table.table_id: table.table_number for table in tables}
+
+        table_wise_sales = []
+        for item in table_sales_qs:
+            table_wise_sales.append({
+                "table_number": table_map.get(item['table_id'], f"Unknown Table {item['table_id']}"),
+                "total_sales": item['total_sales']
+            })
+
+        # Recent Activity Feed
+        recent_orders_qs = Order.objects.order_by('-created_at')[:5]
+        recent_orders = []
+        for order in recent_orders_qs:
+            recent_orders.append({
+                "order_id": order.order_id,
+                "table_number": table_map.get(order.table_id, f"Unknown Table {order.table_id}"),
+                "total_amount": order.total_amount,
+                "status": order.order_status,
+                "time": order.created_at
+            })
+
+        return Response({
+            "basic_metrics": {
+                "daily_revenue": daily_revenue,
+                "monthly_revenue": monthly_revenue,
+                "average_order_value": round(average_order_value, 2) if average_order_value else 0,
+                "total_orders_today": total_orders_today
+            },
+            "order_status_breakdown": status_breakdown,
+            "predictive_analytics": {
+                "peak_ordering_time": peak_ordering_time,
+                "top_selling_items": top_selling_items,
+                "low_performing_items": low_performing_items
+            },
+            "table_analytics": {
+                "table_wise_sales": table_wise_sales
+            },
+            "recent_activity": recent_orders
+        }, status=status.HTTP_200_OK)
