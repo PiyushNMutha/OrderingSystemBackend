@@ -46,7 +46,7 @@ class MenuItemByTableAPI(APIView):
             )
 
         # 2. Fetch available menu items
-        items = MenuItem.objects.filter(availability=True)
+        items = MenuItem.objects.all()
 
         serializer = MenuItemSerializer(items, many=True)
 
