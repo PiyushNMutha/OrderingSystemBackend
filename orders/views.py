@@ -4,6 +4,7 @@ from rest_framework import status
 from django.utils import timezone
 from django.db.models import Sum, Count, Avg
 from django.db.models.functions import ExtractHour
+from datetime import timedelta
 
 from cafeteria_tables.models import CafeteriaTable
 from menu.models import MenuItem
@@ -130,6 +131,37 @@ class AdminDashboardAPI(APIView):
         average_order_value = Order.objects.aggregate(Avg('total_amount'))['total_amount__avg'] or 0
         total_orders_today = Order.objects.filter(created_at__date=today).count()
 
+        # ── Total Items Sold (filterable) ──────────────────────────────────────
+        from_date = request.query_params.get('from_date')  # e.g. 2026-06-01
+        to_date   = request.query_params.get('to_date')    # e.g. 2026-06-15
+        period    = request.query_params.get('period')     # today | weekly | monthly
+
+        if from_date and to_date:
+            # Custom date range takes priority over period
+            filtered_orders = Order.objects.filter(
+                created_at__date__gte=from_date,
+                created_at__date__lte=to_date
+            )
+        elif period == 'today':
+            filtered_orders = Order.objects.filter(created_at__date=today)
+        elif period == 'weekly':
+            week_ago = today - timedelta(days=7)
+            filtered_orders = Order.objects.filter(created_at__date__gte=week_ago)
+        elif period == 'monthly':
+            filtered_orders = Order.objects.filter(
+                created_at__month=current_month,
+                created_at__year=current_year
+            )
+        else:
+            # No filter — all-time total
+            filtered_orders = Order.objects.all()
+
+        filtered_order_ids = filtered_orders.values_list('order_id', flat=True)
+        total_items_sold = OrderItem.objects.filter(
+            order_id__in=filtered_order_ids
+        ).aggregate(total=Sum('quantity'))['total'] or 0
+        # ──────────────────────────────────────────────────────────────────────
+
         # Order Status Breakdown
         status_breakdown_qs = Order.objects.values('order_status').annotate(count=Count('order_id'))
         status_breakdown = {item['order_status']: item['count'] for item in status_breakdown_qs}
@@ -184,7 +216,13 @@ class AdminDashboardAPI(APIView):
                 "daily_revenue": daily_revenue,
                 "monthly_revenue": monthly_revenue,
                 "average_order_value": round(average_order_value, 2) if average_order_value else 0,
-                "total_orders_today": total_orders_today
+                "total_orders_today": total_orders_today,
+                "total_items_sold": total_items_sold,
+            },
+            "applied_filter": {
+                "period": period or ("custom" if from_date and to_date else "all-time"),
+                "from_date": from_date,
+                "to_date": to_date,
             },
             "order_status_breakdown": status_breakdown,
             "predictive_analytics": {
